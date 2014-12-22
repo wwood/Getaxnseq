@@ -62,26 +62,19 @@ class Tax_n_Seq_builder:
             tax_split = [item for item in tax_split if item not in tx]
             
             sequence_ids.append(split[0].split().pop(0) + ',' + tax_split[len(tax_split)-1])           
-            
-            try:
-                if tax_split not in levels[tx2[len(tax_split)-1]]:
-                                                     
-                    levels[tx2[len(tax_split)-1]].append(tax_split)  
-            
-                      
-                     
-            except IndexError:
-                print tax_split
-                exit(1)
+            if tax_split not in levels[tx2[len(tax_split)-1]]:
+                levels[tx2[len(tax_split)-1]].append(tax_split)  
                 
-         
+                
+    
         
         
         with open('Seq.csv', 'w') as seqout:
             
             for entry in sequence_ids:
                 seqout.write(entry + '\n')
-
+                
+        
         tax_ids = Tax_n_Seq_builder().writer(levels,tax_ids)
         levels = {'K' : [], 'P' : [], 'C' : [], 'O' : [], 'F' : [], 'G' : [], 'S' : []}
         
