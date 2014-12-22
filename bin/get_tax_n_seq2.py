@@ -1,3 +1,4 @@
+#!/usr/bin/env python2.7
 
 import argparse
 import re
@@ -92,7 +93,7 @@ class Tax_n_Seq_builder:
         for i in tax_ids:
             splt = i.split(',')
             for item in unc:
-                append(splt[0])
+                unc.append(splt[0])
             
             parent.append(splt[1])
         
