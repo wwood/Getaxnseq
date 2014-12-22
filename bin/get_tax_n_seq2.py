@@ -2,7 +2,7 @@
 
 import argparse
 import re
-
+import IPython
 __author__ = "Joel Boyd"
 __copyright__ = "Copyright 2014"
 __credits__ = ["Joel Boyd"]
@@ -20,42 +20,8 @@ def main(arguments):
 
 class Tax_n_Seq_builder:
     
-    def gg_taxonomy_builder(self, taxonomy_file):
-        
-        levels = {'K' : [], 'P' : [], 'C' : [], 'O' : [], 'F' : [], 'G' : [], 'S' : []}
-        tx = ['k__', 'd__', 'p__', 'c__', 'o__', 'f__', 'g__', 's__']
-        tx2 = ['K', 'P', 'C', 'O', 'F', 'G', 'S']
-        tax_ids = ['tax_id,parent_id,rank,tax_name,root,kingdom,phylum,class,order,family,genus,species', 'Root,Root,root,Root,Root,,,,,,,']
-        sequence_ids = ['seqname,tax_id']
-        
-        for entry in open(taxonomy_file, 'r'):
-            
-            split = entry.rstrip().split('; ')
-            
-            tax_split = [split[0].split()[1]] + split[1:len(split)]
-            
+    def writer(self, levels , tax_ids):
 
-            for idx, item in enumerate(tax_split):
-                tax_split[idx] = re.sub('\s+', '_', item)
-            tax_split = [item for item in tax_split if item not in tx]
-            sequence_ids.append(split[0].split().pop(0) + ',' + tax_split[len(tax_split)-1])           
-            
-            try:
-                if tax_split not in levels[tx2[len(tax_split)-1]]:
-                    levels[tx2[len(tax_split)-1]].append(tax_split)     
-                        
-            except IndexError:
-                print tax_split
-                exit(1)
-        
-        
-        with open('Seq.csv', 'w') as seqout:
-            
-            for entry in sequence_ids:
-                seqout.write(entry + '\n')
-
-
-        
         for level in levels['K']:
             tax_ids.append('%s,Root,kingdom,%s,%s,%s,,,,,,' % (level[0], level[0], 'Root', level[0]))
 
@@ -76,28 +42,79 @@ class Tax_n_Seq_builder:
 
         for level in levels['S']:
             tax_ids.append('%s,%s,species,%s,%s,%s,%s,%s,%s,%s,%s,%s' % (level[6], level[5], level[6], 'Root', level[0], level[1], level[2], level[3], level[4], level[5], level[6]))
-        done = []
-        parent = []
-        unc = []
-        
-        for i in tax_ids:
-            splt = i.split(',')
-            done.append(splt[0])
-            parent.append(splt[1])
-        
-
-        for x in parent:
-            if x not in done:
-                unc.append(x)
-        
-        for i in tax_ids:
-            splt = i.split(',')
-            for item in unc:
-                unc.append(splt[0])
             
-            parent.append(splt[1])
+        return tax_ids
+    
+    def gg_taxonomy_builder(self, taxonomy_file):
+        
+        levels = {'K' : [], 'P' : [], 'C' : [], 'O' : [], 'F' : [], 'G' : [], 'S' : []}
+        tx = ['k__', 'd__', 'p__', 'c__', 'o__', 'f__', 'g__', 's__']
+        tx2 = ['K', 'P', 'C', 'O', 'F', 'G', 'S']
+        tax_ids = ['tax_id,parent_id,rank,tax_name,root,kingdom,phylum,class,order,family,genus,species', 'Root,Root,root,Root,Root,,,,,,,']
+        sequence_ids = ['seqname,tax_id']
+        
+        for entry in open(taxonomy_file, 'r'):
+            
+            split = entry.rstrip().split('; ')
+            
+            tax_split = [split[0].split()[1]] + split[1:len(split)]
+            
+            for idx, item in enumerate(tax_split):
+                tax_split[idx] = re.sub('\s+', '_', item)
+            tax_split = [item for item in tax_split if item not in tx]
+            
+            sequence_ids.append(split[0].split().pop(0) + ',' + tax_split[len(tax_split)-1])           
+            
+            try:
+                if tax_split not in levels[tx2[len(tax_split)-1]]:
+                                                     
+                    levels[tx2[len(tax_split)-1]].append(tax_split)  
+            
+                      
+                     
+            except IndexError:
+                print tax_split
+                exit(1)
+                
+         
         
         
+        with open('Seq.csv', 'w') as seqout:
+            
+            for entry in sequence_ids:
+                seqout.write(entry + '\n')
+
+        tax_ids = Tax_n_Seq_builder().writer(levels,tax_ids)
+        levels = {'K' : [], 'P' : [], 'C' : [], 'O' : [], 'F' : [], 'G' : [], 'S' : []}
+        
+        done = []
+        parent = {}
+        
+        for i in tax_ids:
+            if 'tax_id' not in i and not i.startswith('Root'):
+                splt = [x for x in i.split(',') if x]
+                done.append(splt[0])
+                set_parent = set(parent)
+                parenthood = splt[5:len(splt)-1]
+                
+                for idx, p in enumerate(parenthood):
+                    if p not in set_parent:
+                        
+                        if p.startswith('d__'):
+                            parent[p] = [p]
+                        else:   
+                            parent[p] = parenthood[0:idx+1]
+                            
+                
+        
+        set_done = set(done)
+        
+        for key, item in parent.iteritems():
+            if key not in set_done:
+                levels[tx2[len(item)-1]].append(item)
+        
+        
+        tax_ids = Tax_n_Seq_builder().writer(levels,tax_ids)
         
         with open('Tax2.csv', 'w') as seqout:
             
