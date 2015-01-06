@@ -3,116 +3,131 @@
 import argparse
 import re
 import IPython
-__author__ = "Joel Boyd"
+import sets
+import pprint as pp
+import sys
+
+__author__ = "Joel Boyd, Ben Woodcroft"
 __copyright__ = "Copyright 2014"
-__credits__ = ["Joel Boyd"]
+__credits__ = ["Joel Boyd", "Ben Woodcroft"]
 __license__ = "GPL3"
-__maintainer__ = "Joel Boyd"
+__maintainer__ = "Joel Boyd, Ben Woodcroft"
 __email__ = "joel.boyd near uq.net.au"
 __status__ = "Development"
 __version__ = "0.0.1"
 
 def main(arguments):
-    
-    Tax_n_Seq_builder().gg_taxonomy_builder(arguments.taxonomy)
-
-
+    seqinfo = arguments.output_seqinfo
+    if seqinfo is None: seqinfo = "Seqinfo.csv"
+    output_tax = arguments.output_taxonomy
+    if output_tax is None: output_tax = "Tax.csv"
+    Tax_n_Seq_builder().gg_taxonomy_builder(arguments.taxonomy, output_tax, seqinfo)
 
 class Tax_n_Seq_builder:
     
-    def writer(self, levels , tax_ids):
-
-        for level in levels['K']:
-            tax_ids.append('%s,Root,kingdom,%s,%s,%s,,,,,,' % (level[0], level[0], 'Root', level[0]))
-
-        for level in levels['P']:
-            tax_ids.append('%s,%s,phylum,%s,%s,%s,%s,,,,,' % (level[1], level[0], level[1], 'Root', level[0], level[1])) 
-
-        for level in levels['C']:
-            tax_ids.append('%s,%s,class,%s,%s,%s,%s,%s,,,,' % (level[2], level[1], level[2], 'Root', level[0], level[1], level[2]))    
-
-        for level in levels['O']:    
-            tax_ids.append('%s,%s,order,%s,%s,%s,%s,%s,%s,,,' % (level[3], level[2], level[3], 'Root', level[0], level[1], level[2], level[3]))
-
-        for level in levels['F']:
-            tax_ids.append('%s,%s,family,%s,%s,%s,%s,%s,%s,%s,,' % (level[4], level[3], level[4], 'Root', level[0], level[1], level[2], level[3], level[4]))
-
-        for level in levels['G']:
-            tax_ids.append('%s,%s,genus,%s,%s,%s,%s,%s,%s,%s,%s,' % (level[5], level[4], level[5], 'Root', level[0], level[1], level[2], level[3], level[4], level[5]))   
-
-        for level in levels['S']:
-            tax_ids.append('%s,%s,species,%s,%s,%s,%s,%s,%s,%s,%s,%s' % (level[6], level[5], level[6], 'Root', level[0], level[1], level[2], level[3], level[4], level[5], level[6]))
+    def taxonomy_line(self, level_index, taxon_array):
+        if level_index == 0:
+            return '%s,Root,kingdom,%s,%s,%s,,,,,,' % (taxon_array[level_index], taxon_array[level_index], 'Root', taxon_array[level_index])
+        elif level_index == 1:
+            return '%s,%s,phylum,%s,%s,%s,%s,,,,,' % (taxon_array[level_index], taxon_array[level_index-1], taxon_array[level_index], 'Root', taxon_array[0], taxon_array[1])
+        elif level_index == 2:
+            return '%s,%s,class,%s,%s,%s,%s,%s,,,,' % (taxon_array[level_index], taxon_array[level_index-1], taxon_array[level_index], 'Root', taxon_array[0], taxon_array[1], taxon_array[2])
+        elif level_index == 3:    
+            return '%s,%s,order,%s,%s,%s,%s,%s,%s,,,' % (taxon_array[level_index], taxon_array[level_index-1], taxon_array[level_index], 'Root', taxon_array[0], taxon_array[1], taxon_array[2], taxon_array[3])
+        elif level_index == 4:
+            return '%s,%s,family,%s,%s,%s,%s,%s,%s,%s,,' % (taxon_array[level_index], taxon_array[level_index-1], taxon_array[level_index], 'Root', taxon_array[0], taxon_array[1], taxon_array[2], taxon_array[3], taxon_array[4])
+        elif level_index == 5:
+            return '%s,%s,genus,%s,%s,%s,%s,%s,%s,%s,%s,' % (taxon_array[level_index], taxon_array[level_index-1], taxon_array[level_index], 'Root', taxon_array[0], taxon_array[1], taxon_array[2], taxon_array[3], taxon_array[4], taxon_array[5])
+        elif level_index == 6:   
+            return '%s,%s,species,%s,%s,%s,%s,%s,%s,%s,%s,%s' % (taxon_array[level_index], taxon_array[level_index-1], taxon_array[level_index], 'Root', taxon_array[0], taxon_array[1], taxon_array[2], taxon_array[3], taxon_array[4], taxon_array[5], taxon_array[6])
+        else:
+            raise Exception("Programming error, found too many levels!")
             
-        return tax_ids
     
-    def gg_taxonomy_builder(self, taxonomy_file):
+    def gg_taxonomy_builder(self, taxonomy_file, output_taxonomy, output_seqinfo):
+        first_pass_id_and_taxonomies = []
+        meaningless_taxonomic_names = sets.Set(['k__', 'd__', 'p__', 'c__', 'o__', 'f__', 'g__', 's__'])
         
-        levels = {'K' : [], 'P' : [], 'C' : [], 'O' : [], 'F' : [], 'G' : [], 'S' : []}
-        tx = ['k__', 'd__', 'p__', 'c__', 'o__', 'f__', 'g__', 's__']
-        tx2 = ['K', 'P', 'C', 'O', 'F', 'G', 'S']
-        tax_ids = ['tax_id,parent_id,rank,tax_name,root,kingdom,phylum,class,order,family,genus,species', 'Root,Root,root,Root,Root,,,,,,,']
-        sequence_ids = ['seqname,tax_id']
-        
-        for entry in open(taxonomy_file, 'r'):
-            
+        for entry in open(taxonomy_file):
+            # split the entire line including the  on '; '
             split = entry.rstrip().split('; ')
             
-            tax_split = [split[0].split()[1]] + split[1:len(split)]
+            # split out the taxon ID from the first split of above
+            first_split = split[0].split()
+            taxon_id = first_split[0]
+            first_taxon = first_split[1]
+            tax_split = [first_taxon] + split[1:]
             
+            # Replace spaces with underscores e.g. 'Candidatus my_genus'
             for idx, item in enumerate(tax_split):
                 tax_split[idx] = re.sub('\s+', '_', item)
-            tax_split = [item for item in tax_split if item not in tx]
+                
+            # Remove 'empty' taxononomies e.g. 's__'
+            tax_split = [item for item in tax_split if item not in meaningless_taxonomic_names]
             
-            sequence_ids.append(split[0].split().pop(0) + ',' + tax_split[len(tax_split)-1])           
-            if tax_split not in levels[tx2[len(tax_split)-1]]:
-                levels[tx2[len(tax_split)-1]].append(tax_split)  
-                
-                
-    
-        
-        
-        with open('Seq.csv', 'w') as seqout:
+            # Add this fixed up list to the list
+            first_pass_id_and_taxonomies.append([taxon_id]+tax_split)
             
-            for entry in sequence_ids:
-                seqout.write(entry + '\n')
-                
+        # Find taxons that have multiple parents, building a hash of parents as we go (i.e. a tree of taxonomies embedded in a hash)
+        #
+        # Assumes that no two taxonomic labels are the same when they are from different
+        # taxonomic levels. When there are children with multiple parents at the
+        # same taxonomic label then these are warned about and worked around.
+        parents = {} #hash of taxon to immediate parent
+        known_duplicates = sets.Set([])
+        for j, array in enumerate(first_pass_id_and_taxonomies):
+            taxonomy = array[1:]
+            for i, tax in enumerate(taxonomy):
+                if i==0: continue #top levels don't have parents
+                ancestry = taxonomy[i-1]
+                if parents.has_key(tax):
+                    if parents[tax] != ancestry:
+                        print "Currently the code that attempts to fix incongruency in the taxonomic annotation is probably broken (fails during pplacer), so quitting now"
+                        sys.exit(1)
+
+                        dup = "%s%s" %(parents[tax], ancestry)
+                        # don't report the same problem several times
+                        if dup not in known_duplicates:
+                            print " WARN Found taxon '%s' with multiple parents %s and %s" % (tax, parents[tax], ancestry)
+                            known_duplicates.add(dup)
+                        # fix the current one
+                        new_name_id = 1
+                        new_name = "%se%s" % (tax, new_name_id)
+                        while parents.has_key(new_name) and parents[new_name] != ancestry:
+                            new_name_id += 1
+                            new_name = "%se%s" % (tax, new_name_id)
+                        first_pass_id_and_taxonomies[j][i+1] = new_name
+                        taxonomy[i] = new_name
+                        parents[new_name] = ancestry
+                else:
+                    # normal case, seeing a new taxon and parent for the first time
+                    parents[tax] = ancestry
+                    
+        #pp.pprint(parents)
+        #pp.pprint(first_pass_id_and_taxonomies)
         
-        tax_ids = Tax_n_Seq_builder().writer(levels,tax_ids)
-        levels = {'K' : [], 'P' : [], 'C' : [], 'O' : [], 'F' : [], 'G' : [], 'S' : []}
-        
-        done = []
-        parent = {}
-        
-        for i in tax_ids:
-            if 'tax_id' not in i and not i.startswith('Root'):
-                splt = [x for x in i.split(',') if x]
-                done.append(splt[0])
-                set_parent = set(parent)
-                parenthood = splt[5:len(splt)-1]
-                
-                for idx, p in enumerate(parenthood):
-                    if p not in set_parent:
-                        
-                        if p.startswith('d__'):
-                            parent[p] = [p]
-                        else:   
-                            parent[p] = parenthood[0:idx+1]
-                            
-                
-        
-        set_done = set(done)
-        
-        for key, item in parent.iteritems():
-            if key not in set_done:
-                levels[tx2[len(item)-1]].append(item)
-        
-        
-        tax_ids = Tax_n_Seq_builder().writer(levels,tax_ids)
-        
-        with open('Tax2.csv', 'w') as seqout:
+        # Write the sequence file
+        with open(output_seqinfo, 'w') as seqout:
+            # write header
+            seqout.write('seqname,tax_id\n')
+            # write each taxonomic association 
+            for array in first_pass_id_and_taxonomies:
+                seqout.write("%s,%s\n" % (array[0], array[-1]))
             
-            for entry in tax_ids:
-                seqout.write(entry + '\n')
+        # Write the taxonomy file
+        noted_taxonomies = sets.Set([])
+        with open(output_taxonomy, 'w') as seqout:
+            # write header and root line
+            seqout.write('tax_id,parent_id,rank,tax_name,root,kingdom,phylum,class,order,family,genus,species\n')
+            seqout.write('Root,Root,root,Root,Root,,,,,,,\n')
+            # write all the taxonomies
+            for array in first_pass_id_and_taxonomies:
+                taxons = array[1:]
+                for i, tax in enumerate(taxons):
+                    line = self.taxonomy_line(i, taxons[:(i+1)])
+                    if line not in noted_taxonomies:
+                        seqout.write(line+"\n")
+                        noted_taxonomies.add(line)
     
 
     
@@ -121,6 +136,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='''Create a reference package %s''' % __version__
                                 , epilog='==============================================================================')
     parser.add_argument('--taxonomy' ,type = str, help='Taxonomy file to be converted', required=True)
+    parser.add_argument('--output_seqinfo' ,type = str, help='Seqinfo file to be created', default='Seqinfo.csv')
+    parser.add_argument('--output_taxonomy' ,type = str, help='Taxonomy file to be created', default='Tax.csv')
     args = parser.parse_args()
 
-    main(args)  
+    main(args)
