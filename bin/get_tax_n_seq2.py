@@ -83,6 +83,7 @@ class Tax_n_Seq_builder:
                 if parents.has_key(tax):
                     if parents[tax] != ancestry:
                         print "Currently the code that attempts to fix incongruency in the taxonomic annotation is probably broken (fails during pplacer), so quitting now"
+                        print "The problematic node found is taxon '%s' with multiple parents %s and %s" % (tax, parents[tax], ancestry)
                         sys.exit(1)
 
                         dup = "%s%s" %(parents[tax], ancestry)
